@@ -3,279 +3,317 @@
  * http://crlcu.github.io/multiselect/
  *
  * Copyright (c) 2015 Adrian Crisan
+ * Copyright (c) 2015 Lunci Hua
  * Licensed under the MIT license (https://github.com/crlcu/multiselect/blob/master/LICENSE)
  */
- ;(function (factory) {
-   	if (typeof define === 'function' && define.amd) {
-     	// AMD. Register as an anonymous module depending on jQuery.
-     	define(['jquery'], factory);
-   	} else {
-    	// No AMD. Register plugin with global jQuery object.
-    	factory(jQuery);
-   	}
- }(function ($) {
+; (function (factory) {
+    if (typeof define === 'function' && define.amd) {
+        // AMD. Register as an anonymous module depending on jQuery.
+        define(['jquery'], factory);
+    } else {
+        // No AMD. Register plugin with global jQuery object.
+        factory(jQuery);
+    }
+}(function ($) {
 
- 	var Multiselect = (function( $ ) {
-		"use strict";
-		
-		/**	Multiselect object constructor
+    var Multiselect = (function ($) {
+        "use strict";
+
+        /**	Multiselect object constructor
 		 *
 		 *	@class Multiselect
 		 *	@constructor
 		**/
-		function Multiselect( $select, settings ) {
-			if ( typeof $ != 'function' ) {
-				throw "$ is undefined or not a function";
-			}
-			
-			var id = $select.attr('id');
-			this.left = $select;
-			this.right = $( settings.right ).length ? $( settings.right ) : $('#' + id + '_to');
-			this.actions = {
-				leftAll: 		$( settings.leftAll ).length ? $( settings.leftAll ) : $('#' + id + '_leftAll'),
-				rightAll: 		$( settings.rightAll ).length ? $( settings.rightAll ) : $('#' + id + '_rightAll'),
-				leftSelected:	$( settings.leftSelected ).length ? $( settings.leftSelected ) : $('#' + id + '_leftSelected'),
-				rightSelected:	$( settings.rightSelected ).length ? $( settings.rightSelected ) : $('#' + id + '_rightSelected'),
+        function Multiselect($select, settings) {
+            if (typeof $ != 'function') {
+                throw "$ is undefined or not a function";
+            }
 
-				undo:			$( settings.undo ).length ? $( settings.undo ) : $('#' + id + '_undo'),
-				redo:			$( settings.redo ).length ? $( settings.redo ) : $('#' + id + '_redo')
-			};
-			
-			delete settings.leftAll;
-			delete settings.leftSelected;
-			delete settings.right;
-			delete settings.rightAll;
-			delete settings.rightSelected;
-			
-			this.options = {
-				keepRenderingSort: settings.keepRenderingSort
-			};
+            var id = $select.attr('id');
+            this.left = $select;
+            this.right = $(settings.right).length ? $(settings.right) : $('#' + id + '_to');
+            this.actions = {
+                leftAll: $(settings.leftAll).length ? $(settings.leftAll) : $('#' + id + '_leftAll'),
+                rightAll: $(settings.rightAll).length ? $(settings.rightAll) : $('#' + id + '_rightAll'),
+                leftSelected: $(settings.leftSelected).length ? $(settings.leftSelected) : $('#' + id + '_leftSelected'),
+                rightSelected: $(settings.rightSelected).length ? $(settings.rightSelected) : $('#' + id + '_rightSelected'),
 
-			delete settings.keepRenderingSort;
+                undo: $(settings.undo).length ? $(settings.undo) : $('#' + id + '_undo'),
+                redo: $(settings.redo).length ? $(settings.redo) : $('#' + id + '_redo')
+            };
 
-			this.callbacks = settings;
-			this.undoStack = [];
-			this.redoStack = [];
-			
-			this.init();
-		}
-		
-		Multiselect.prototype = {
-			init: function() {
-				var self = this;
+            delete settings.leftAll;
+            delete settings.leftSelected;
+            delete settings.right;
+            delete settings.rightAll;
+            delete settings.rightSelected;
 
-				if (self.options.keepRenderingSort) {
-					self.skipInitSort = true;
+            this.options = {
+                keepRenderingSort: settings.keepRenderingSort
+            };
 
-					self.callbacks.sort = function(a, b) {
-						return $(a).data('position') > $(b).data('position') ? 1 : -1;
-					};
+            delete settings.keepRenderingSort;
 
-					self.left.find('option').each(function(index, option) {
-						$(option).data('position', index);
-					});
-				}
+            this.callbacks = settings;
+            this.undoStack = [];
+            this.redoStack = [];
 
-				if ( typeof self.callbacks.startUp == 'function' ) {
-					self.callbacks.startUp( self.left, self.right );
-				}
-				
-				if ( !self.skipInitSort && typeof self.callbacks.sort == 'function' ) {
-					self.left.find('option').sort(self.callbacks.sort).appendTo(self.left);
-					self.right.find('option').sort(self.callbacks.sort).appendTo(self.right);
-				}
-				
-				self.events( self.actions );
-			},
-			
-			events: function( actions ) {
-				var self = this;
-				
-				self.left.on('dblclick', 'option', function(e) {
-					e.preventDefault();
-					self.moveToRight(this);
-				});
-				
-				self.right.on('dblclick', 'option', function(e) {
-					e.preventDefault();
-					self.moveToLeft(this);
-				});
-				
-				// dblclick support for IE
-				if ( navigator.userAgent.match(/MSIE/i)  || navigator.userAgent.indexOf('Trident/') > 0 || navigator.userAgent.indexOf('Edge/') > 0) {
-					self.left.dblclick(function(e) {
-						actions.rightSelected.trigger('click');
-					});
-					
-					self.right.dblclick(function(e) {
-						actions.leftSelected.trigger('click');
-					});
-				}
-				
-				actions.rightSelected.on('click', function(e) {
-					e.preventDefault();
-					var options = self.left.find('option:selected');
-					
-					if ( options ) {
-						self.moveToRight(options);
-					}
+            this.init();
+        }
 
-					$(this).blur();
-				});
-				
-				actions.leftSelected.on('click', function(e) {
-					e.preventDefault();
-					var options = self.right.find('option:selected');
-					
-					if ( options ) {
-						self.moveToLeft(options);
-					}
+        Multiselect.prototype = {
+            init: function () {
+                var self = this;
+                self["hasGroup"] = false;
+                self.callbacks.sort = function (a, b) {
+                    return $(a).data('position') > $(b).data('position') ? 1 : -1;
+                };
+                if (self.left.find('optgroup').length > 0) {
+                    self.hasGroup = true;
+                    //self.sortGroup = function (group) {
+                    //    $(group).find('option').sort(self.callbacks.sort).appendTo(group);
+                    //}
+                    
+                    //self.sortGroups = function (groups) {
+                    //    $(groups).each(function (group) {
+                    //        self.sortGroup(group);
+                    //    });
+                    //}
+                }
+                if (self.hasGroup) {
+                    self.left.find('optgroup').each(function (indexGroup, group) {
+                        $(group).find('option').each(function (index, option) {
+                            $(option).data('group', $(group).attr('label') + indexGroup);
+                        });
+                    });
+                }
+                if (self.options.keepRenderingSort) {
+                    self.skipInitSort = true;
+                    self.left.find('option').each(function (index, option) {
+                        $(option).data('position', index);
+                    });
+                }
 
-					$(this).blur();
-				});
-				
-				actions.rightAll.on('click', function(e) {
-					e.preventDefault();
-					var options = self.left.find('option');
-					
-					if ( options ) {
-						self.moveToRight(options);
-					}
+                if (typeof self.callbacks.startUp == 'function') {
+                    self.callbacks.startUp(self.left, self.right);
+                }
 
-					$(this).blur();
-				});
-				
-				actions.leftAll.on('click', function(e) {
-					e.preventDefault();
-					
-					var options = self.right.find('option');
-					
-					if ( options ) {
-						self.moveToLeft(options);
-					}
+                if (!self.skipInitSort && typeof self.callbacks.sort == 'function') {
+                    if (self.hasGroup) {
+                        self.left.find('optgroup').each(function (group) {
+                            $(group).find('option').sort(self.callbacks.sort).appendTo(self.left);
+                        });
+                    } else {
+                        self.left.find('option').sort(self.callbacks.sort).appendTo(self.left);
+                    }                    
+                    self.right.find('option').sort(self.callbacks.sort).appendTo(self.right);
+                }
 
-					$(this).blur();
-				});
+                self.events(self.actions);
+            },
 
-				actions.undo.on('click', function(e) {
-					e.preventDefault();
+            events: function (actions) {
+                var self = this;
 
-					self.undo();
-				});
+                self.left.on('dblclick', 'option', function (e) {
+                    e.preventDefault();
+                    self.moveToRight(this);
+                });
 
-				actions.redo.on('click', function(e) {
-					e.preventDefault();
+                self.right.on('dblclick', 'option', function (e) {
+                    e.preventDefault();
+                    self.moveToLeft(this);
+                });
 
-					self.redo();
-				});
-			},
-			
-			moveToRight: function( options, silent, skipStack ) {
-				var self = this;
-				
-				if ( typeof self.callbacks.beforeMoveToRight == 'function' && !silent ) {
-					if ( !self.callbacks.beforeMoveToRight( self.left, self.right, options ) ) {
-						return false;
-					}
-				}
-				
-				self.right.append(options);
+                // dblclick support for IE
+                if (navigator.userAgent.match(/MSIE/i) || navigator.userAgent.indexOf('Trident/') > 0 || navigator.userAgent.indexOf('Edge/') > 0) {
+                    self.left.dblclick(function (e) {
+                        actions.rightSelected.trigger('click');
+                    });
 
-				if ( !skipStack ) {
-					self.undoStack.push(['right', options ]);
-					self.redoStack = [];
-				}
-				
-				if ( typeof self.callbacks.sort == 'function' && !silent ) {
-					self.right.find('option').sort(self.callbacks.sort).appendTo(self.right);
-				}
-				
-				if ( typeof self.callbacks.afterMoveToRight == 'function' && !silent ){
-					self.callbacks.afterMoveToRight( self.left, self.right, options );
-				}
-				
-				return self;
-			},
-			
-			moveToLeft: function( options, silent, skipStack ) {
-				var self = this;
-				
-				if ( typeof self.callbacks.beforeMoveToLeft == 'function' && !silent ) {
-					if ( !self.callbacks.beforeMoveToLeft( self.left, self.right, options ) ) {
-						return false;
-					}
-				}
-					
-				self.left.append(options);
-				
-				if ( !skipStack ) {
-					self.undoStack.push(['left', options ]);
-					self.redoStack = [];
-				}
-				
-				if ( typeof self.callbacks.sort == 'function' && !silent ) {
-					self.left.find('option').sort(self.callbacks.sort).appendTo(self.left);		
-				}
-				
-				if ( typeof self.callbacks.afterMoveToLeft == 'function' && !silent ) {
-					self.callbacks.afterMoveToLeft( self.left, self.right, options );
-				}
-				
-				return self;
-			},
+                    self.right.dblclick(function (e) {
+                        actions.leftSelected.trigger('click');
+                    });
+                }
 
-			undo: function() {
-				var self = this;
-				var last = self.undoStack.pop();
+                actions.rightSelected.on('click', function (e) {
+                    e.preventDefault();
+                    var options = self.left.find('option:selected');
 
-				if ( last ) {
-					self.redoStack.push(last);
+                    if (options) {
+                        self.moveToRight(options);
+                    }
 
-					switch(last[0]) {
-						case 'left':
-							self.moveToRight(last[1], false, true);
-							break;
-						case 'right':
-							self.moveToLeft(last[1], false, true);
-							break;
-					}
-				}
-			},
-			redo: function() {
-				var self = this;
-				var last = self.redoStack.pop();
+                    $(this).blur();
+                });
 
-				if ( last ) {
-					self.undoStack.push(last);
+                actions.leftSelected.on('click', function (e) {
+                    e.preventDefault();
+                    var options = self.right.find('option:selected');
 
-					switch(last[0]) {
-						case 'left':
-							self.moveToLeft(last[1], false, true);
-							break;
-						case 'right':
-							self.moveToRight(last[1], false, true);
-							break;
-					}
-				}
-			}
-		}
-		
-		return Multiselect;
-	})( jQuery );
-	
-	$.multiselect = {
-		defaults: {
-			/**	will be executed once - remove from $left all options that are already in $right
+                    if (options) {
+                        self.moveToLeft(options);
+                    }
+
+                    $(this).blur();
+                });
+
+                actions.rightAll.on('click', function (e) {
+                    e.preventDefault();
+                    var options = self.left.find('option');
+
+                    if (options) {
+                        self.moveToRight(options);
+                    }
+
+                    $(this).blur();
+                });
+
+                actions.leftAll.on('click', function (e) {
+                    e.preventDefault();
+
+                    var options = self.right.find('option');
+
+                    if (options) {
+                        self.moveToLeft(options);
+                    }
+
+                    $(this).blur();
+                });
+
+                actions.undo.on('click', function (e) {
+                    e.preventDefault();
+
+                    self.undo();
+                });
+
+                actions.redo.on('click', function (e) {
+                    e.preventDefault();
+
+                    self.redo();
+                });
+            },
+
+            moveToRight: function (options, silent, skipStack) {
+                var self = this;
+
+                if (typeof self.callbacks.beforeMoveToRight == 'function' && !silent) {
+                    if (!self.callbacks.beforeMoveToRight(self.left, self.right, options)) {
+                        return false;
+                    }
+                }
+
+                self.right.append(options);
+
+                if (!skipStack) {
+                    self.undoStack.push(['right', options]);
+                    self.redoStack = [];
+                }
+
+                if (typeof self.callbacks.sort == 'function' && !silent) {
+                    self.right.find('option').sort(self.callbacks.sort).appendTo(self.right);
+                }
+
+                if (typeof self.callbacks.afterMoveToRight == 'function' && !silent) {
+                    self.callbacks.afterMoveToRight(self.left, self.right, options);
+                }
+
+                return self;
+            },
+
+            moveToLeft: function (options, silent, skipStack) {
+                var self = this;
+
+                if (typeof self.callbacks.beforeMoveToLeft == 'function' && !silent) {
+                    if (!self.callbacks.beforeMoveToLeft(self.left, self.right, options)) {
+                        return false;
+                    }
+                }
+
+                if (self.hasGroup) {
+                    var groups = self.left.find('optgroup');
+                    for (var i = 0; i < groups.length; ++i) {
+                        var group = $(groups[i]);
+                        if ($(group).attr('label') + i === $(options).data('group')) {
+                            $(group).append(options);
+                            if (typeof self.callbacks.sort == 'function' && !silent) {
+                                //self.sortGroup(group);
+                               $(group).find('option').sort(self.callbacks.sort).appendTo(group);
+                            }
+                            break;
+                        }
+                    }
+                } else {
+                    self.left.append(options);
+                    if (typeof self.callbacks.sort == 'function' && !silent) {
+                        self.left.find('option').sort(self.callbacks.sort).appendTo(self.left);
+                    }
+                }
+
+                if (!skipStack) {
+                    self.undoStack.push(['left', options]);
+                    self.redoStack = [];
+                }
+
+                if (typeof self.callbacks.afterMoveToLeft == 'function' && !silent) {
+                    self.callbacks.afterMoveToLeft(self.left, self.right, options);
+                }
+
+                return self;
+            },
+
+            undo: function () {
+                var self = this;
+                var last = self.undoStack.pop();
+
+                if (last) {
+                    self.redoStack.push(last);
+
+                    switch (last[0]) {
+                        case 'left':
+                            self.moveToRight(last[1], false, true);
+                            break;
+                        case 'right':
+                            self.moveToLeft(last[1], false, true);
+                            break;
+                    }
+                }
+            },
+            redo: function () {
+                var self = this;
+                var last = self.redoStack.pop();
+
+                if (last) {
+                    self.undoStack.push(last);
+
+                    switch (last[0]) {
+                        case 'left':
+                            self.moveToLeft(last[1], false, true);
+                            break;
+                        case 'right':
+                            self.moveToRight(last[1], false, true);
+                            break;
+                    }
+                }
+            }
+        }
+
+        return Multiselect;
+    })(jQuery);
+
+    $.multiselect = {
+        defaults: {
+            /**	will be executed once - remove from $left all options that are already in $right
 			 *
 			 *	@method startUp
 			**/
-			startUp: function( $left, $right ) {
-				$right.find('option').each(function(index, option) {
-					$left.find('option[value="' + option.value + '"]').remove();
-				});
-			},
+            startUp: function ($left, $right) {
+                $right.find('option').each(function (index, option) {
+                    $left.find('option[value="' + option.value + '"]').remove();
+                });
+            },
 
-			/**	will be executed each time before moving option[s] to right
+            /**	will be executed each time before moving option[s] to right
 			 *  
 			 *	IMPORTANT : this method must return boolean value
 			 *      true    : continue to moveToRight method
@@ -289,18 +327,18 @@
 			 *  @default true
 			 *  @return {boolean}
 			**/
-			beforeMoveToRight: function($left, $right, options) { return true; },
+            beforeMoveToRight: function ($left, $right, options) { return true; },
 
-			/*	will be executed each time after moving option[s] to right
+            /*	will be executed each time after moving option[s] to right
 			 * 
 			 *  @method afterMoveToRight
 			 *  @attribute $left jQuery object
 			 *  @attribute $right jQuery object
 			 *  @attribute options HTML object (the option[s] which was selected to be moved)
 			**/
-			afterMoveToRight: function($left, $right, options){},
+            afterMoveToRight: function ($left, $right, options) { },
 
-			/**	will be executed each time before moving option[s] to left
+            /**	will be executed each time before moving option[s] to left
 			 *  
 			 *	IMPORTANT : this method must return boolean value
 			 *      true    : continue to moveToRight method
@@ -314,18 +352,18 @@
 			 *  @default true
 			 *  @return {boolean}
 			**/
-			beforeMoveToLeft: function($left, $right, option){ return true; },
+            beforeMoveToLeft: function ($left, $right, option) { return true; },
 
-			/*	will be executed each time after moving option[s] to left
+            /*	will be executed each time after moving option[s] to left
 			 * 
 			 *  @method afterMoveToLeft
 			 *  @attribute $left jQuery object
 			 *  @attribute $right jQuery object
 			 *  @attribute options HTML object (the option[s] which was selected to be moved)
 			**/
-			afterMoveToLeft: function($left, $right, option){},
+            afterMoveToLeft: function ($left, $right, option) { },
 
-			/**	sort options by option text
+            /**	sort options by option text
 			 * 
 			 *  @method sort
 			 *  @attribute a HTML option
@@ -333,27 +371,27 @@
 			 *
 			 *  @return 1/-1
 			**/
-			sort: function(a, b) {
-				if (a.innerHTML == 'NA') {
-					return 1;   
-				} else if (b.innerHTML == 'NA') {
-					return -1;   
-				}
-				
-				return (a.innerHTML > b.innerHTML) ? 1 : -1;
-			}
-		},
-		setup: {}
-	}
-    
-    $.fn.multiselect = function( options ) {
-        return this.each(function() {
-			var $this = $(this),
+            sort: function (a, b) {
+                if (a.innerHTML == 'NA') {
+                    return 1;
+                } else if (b.innerHTML == 'NA') {
+                    return -1;
+                }
+
+                return (a.innerHTML > b.innerHTML) ? 1 : -1;
+            }
+        },
+        setup: {}
+    }
+
+    $.fn.multiselect = function (options) {
+        return this.each(function () {
+            var $this = $(this),
 				data = $this.data();
-			
-			var settings = $.extend({}, $.multiselect.defaults, $.multiselect.setup, data, options);
-			
+
+            var settings = $.extend({}, $.multiselect.defaults, $.multiselect.setup, data, options);
+
             return new Multiselect($this, settings);
-        });  
+        });
     };
- }));
+}));
